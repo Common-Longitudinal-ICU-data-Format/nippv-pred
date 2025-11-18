@@ -60,10 +60,25 @@ def _():
 
 @app.cell
 def _(json, os):
-    # Load configuration (looking in parent directory)
-    config_path = '../config.json'
-    if not os.path.exists(config_path):
-        config_path = '../clif_config.json'
+    # Load configuration
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+    project_root = os.path.dirname(script_dir)  # Parent of code/ directory
+
+    # Try to find config in project root first, then current directory
+    config_path = None
+    for path in [
+        os.path.join(project_root, 'config.json'),
+        os.path.join(project_root, 'clif_config.json'),
+        'config.json',
+        'clif_config.json'
+    ]:
+        if os.path.exists(path):
+            config_path = path
+            break
+
+    if config_path is None:
+        raise FileNotFoundError("Could not find config.json or clif_config.json")
 
     with open(config_path, 'r') as config_file:
         config = json.load(config_file)
@@ -72,8 +87,8 @@ def _(json, os):
     print(f"Data path: {config['data_directory']}")
     print(f"File type: {config['filetype']}")
 
-    # Output directory (in parent directory)
-    output_dir = '../output'
+    # Output directory in project root
+    output_dir = os.path.join(project_root, 'output')
     os.makedirs(output_dir, exist_ok=True)
     print(f"Output directory: {output_dir}")
     return config_path, output_dir
