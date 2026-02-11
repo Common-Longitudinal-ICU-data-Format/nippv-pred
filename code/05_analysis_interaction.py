@@ -10,8 +10,12 @@ import statsmodels.formula.api as smf
 
 from scipy.stats import chi2_contingency, ttest_ind
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-nippv_data = pd.read_csv(os.path.join(BASE_DIR, '..', 'output', 'NIPPV_analytic_dataset.csv'))
+
+# Resolve paths relative to this script
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+
+nippv_data = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'NIPPV_analytic_dataset.csv'))
 
  
 
@@ -19,8 +23,8 @@ nippv_data = pd.read_csv(os.path.join(BASE_DIR, '..', 'output', 'NIPPV_analytic_
 
 predictors = [
 
-    'age_scale', 'female', 'pco2_scale', 'ph_scale', 'map',
-    'rr_scale', 'hr_scale', 'fio2_high', 'peep_set_after_NIPPV', 'tidal_volume_obs_after_NIPPV'
+    'age_scale', 'female', 'pco2_scale', 'ph_scale', 'map_scale',
+    'rr_scale', 'hr_scale', 'fio2_high', 'peep_scale', 'tidal_volume_scale'
 ]
  
 
@@ -102,11 +106,11 @@ print(univariate_results_df)
 
 # Define the formula for the final multivariable model with specific interaction terms
 
-final_formula = ('failure ~ age_scale + female + pco2_scale + ph_scale + map'
+final_formula = ('failure ~ age_scale + female + pco2_scale + ph_scale + map_scale'
 
-                 '+ rr_scale + hr_scale + fio2_high + peep_set_after_NIPPV'
+                 '+ rr_scale + hr_scale + fio2_high + peep_scale + tidal_volume_scale'
 
-                 '+ tidal_volume_obs_after_NIPPV + age_scale * ph_scale + pco2_scale * rr_scale')
+                 '+ age_scale * ph_scale + pco2_scale * rr_scale')
 
 # Fit the final multivariable logistic regression model
 
@@ -142,6 +146,9 @@ print(multivariable_results)
 # EXPORT RESULTS TO CSV 
 # =====================================================
 
-univariate_results_df.to_csv(os.path.join(BASE_DIR, '..', 'output_to_share', 'univariate_logistic_results_rush.csv'), index=False)
+SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share')
+os.makedirs(SHARE_DIR, exist_ok=True)
 
-multivariable_results.to_csv(os.path.join(BASE_DIR, '..', 'output_to_share', 'multivariable_logistic_results_rush.csv'), index=False)
+univariate_results_df.to_csv(os.path.join(SHARE_DIR, "univariate_logistic_results_Interaction.csv"), index=False)
+
+multivariable_results.to_csv(os.path.join(SHARE_DIR, "multivariable_logistic_results_Interaction.csv"), index=False)

@@ -6,8 +6,11 @@ from scipy import stats
 # =====================================================
 # Load Data
 # =====================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-df = pd.read_csv(os.path.join(BASE_DIR, '..', 'output', 'NIPPV_analytic_dataset.csv'))
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+
+df = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'NIPPV_analytic_dataset.csv'))
 
 # Ensure NIPPV failure is coded as Yes/No
 df['failure'] = df['failure'].map({1: "Yes", 0: "No"})
@@ -18,14 +21,14 @@ df['failure'] = df['failure'].map({1: "Yes", 0: "No"})
 
 continuous_vars = {
     "age_at_admission": "Age at Admission, years",
-    "map": "MAP, mmHg",
-    "pco2_after_NIPPV": "Initial pCO₂, mmHg",
-    "ph_after_NIPPV": "Initial pH",
-    "peep_set_after_NIPPV": "Initial PEEP, cmH₂O",
-    "tidal_volume_obs_after_NIPPV": "Tidal Volume, mL",
-    "heart_rate_after_NIPPV": "HR after NIPPV, bpm",
-    "respiratory_rate_after_NIPPV": "RR after NIPPV, bpm",
-    "fio2_after_NIPPV": "FiO₂ after NIPPV, %"
+    "map_after_NIPPV": "map_after_NIPPV, mmHg",
+    "pco2_after_NIPPV": "pco2_after_NIPPV, mmHg",
+    "ph_after_NIPPV": "ph_after_NIPPV",
+    "peep_set_after_NIPPV": "peep_set_after_NIPPV, cmH₂O",
+    "tidal_volume_obs_after_NIPPV": "tidal_volume_obs_after_NIPPV, mL",
+    "heart_rate_after_NIPPV": "heart_rate_after_NIPPV, bpm",
+    "respiratory_rate_after_NIPPV": "respiratory_rate_after_NIPPV, bpm",
+    "fio2_after_NIPPV": "fio2_after_NIPPV, %"
 }
 
 categorical_vars = {
@@ -112,4 +115,5 @@ table1 = pd.DataFrame(rows[1:], columns=rows[0])
 
 print("\nTable 1. Descriptive Characteristics of Study Population by NIPPV Failure Status\n")
 print(table1.to_string(index=False))
-table1.to_csv(os.path.join(BASE_DIR, '..', 'output_to_share', 'descriptive_characteristics.csv'), index = False)
+os.makedirs(os.path.join(ROOT_DIR, 'output_to_share'), exist_ok=True)
+table1.to_csv(os.path.join(ROOT_DIR, 'output_to_share', 'descriptive_characteristics.csv'), index = False)
