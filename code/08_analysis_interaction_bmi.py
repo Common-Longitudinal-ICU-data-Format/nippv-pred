@@ -25,11 +25,11 @@ with open(config_path) as f:
     config = json.load(f)
 SITE = config.get('site', 'unknown')
 
-nippv_data = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'no_bmi', 'NIPPV_analytic_dataset.csv'))
+nippv_data = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'bmi', 'NIPPV_analytic_dataset_bmi.csv'))
 
 # Predictor lists
 main_predictors = [
-    'age_scale', 'female', 'pco2_scale', 'ph_scale', 'map_scale',
+    'age_scale', 'bmi_scale', 'female', 'pco2_scale', 'ph_scale', 'map_scale',
     'rr_scale', 'hr_scale', 'fio2_high', 'peep_scale', 'tidal_volume_scale'
 ]
 
@@ -38,7 +38,7 @@ main_predictors = [
 # =====================================================
 
 # Define the formula with interaction terms (Age x pH, pCO2 x RR)
-final_formula = ('failure ~ age_scale + female + pco2_scale + ph_scale + map_scale '
+final_formula = ('failure ~ age_scale + bmi_scale + female + pco2_scale + ph_scale + map_scale '
                  '+ rr_scale + hr_scale + fio2_high + peep_scale + tidal_volume_scale '
                  '+ age_scale:ph_scale + pco2_scale:rr_scale')
 
@@ -57,7 +57,7 @@ multivariable_results = pd.DataFrame({
 })
 
 # Display multivariable results
-print("\nMultivariable Logistic Regression Results (with Interactions):")
+print("\nMultivariable Logistic Regression Results (with Interactions and bmi):")
 print(multivariable_results)
 
 # =====================================================
@@ -160,7 +160,7 @@ print(f"LR test (interaction vs no-interaction): chi2={lr_stat:.4f}, df={lr_df},
 
 diagnostics = pd.DataFrame({
     'site': [SITE],
-    'model': ['multivariable_interaction'],
+    'model': ['multivariable_interaction_bmi'],
     'N': [len(nippv_data)],
     'N_events': [n1],
     'AUC': [round(auc, 4)],
@@ -192,25 +192,25 @@ N_events = int(nippv_data['failure'].sum())
 multivariable_results['site'] = SITE
 multivariable_results['N'] = N
 multivariable_results['N_events'] = N_events
-multivariable_results['model_type'] = 'multivariable_interaction'
+multivariable_results['model_type'] = 'multivariable_interaction_bmi'
 
 # =====================================================
 # EXPORT RESULTS TO CSV
 # =====================================================
 
-SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'no_bmi')
+SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'bmi')
 os.makedirs(SHARE_DIR, exist_ok=True)
 
 # NOTE: Univariate results are exported by 04_analysis_no_interaction.py only (no duplicates)
-multivariable_results.to_csv(os.path.join(SHARE_DIR, "multivariable_logistic_results_Interaction.csv"), index=False)
+multivariable_results.to_csv(os.path.join(SHARE_DIR, "multivariable_logistic_results_Interaction_bmi.csv"), index=False)
 
-diagnostics.to_csv(os.path.join(SHARE_DIR, "model_diagnostics_Interaction.csv"), index=False)
+diagnostics.to_csv(os.path.join(SHARE_DIR, "model_diagnostics_Interaction_bmi.csv"), index=False)
 
 # =====================================================
 # VARIANCE-COVARIANCE MATRIX (for multivariate pooling)
 # =====================================================
 vcov = final_model.cov_params()
-vcov.to_csv(os.path.join(SHARE_DIR, "vcov_matrix_Interaction.csv"))
+vcov.to_csv(os.path.join(SHARE_DIR, "vcov_matrix_Interaction_bmi.csv"))
 print(f"VCV matrix exported: {vcov.shape[0]}x{vcov.shape[1]}")
 
 # =====================================================
@@ -254,7 +254,7 @@ try:
         'model_type': 'firth_interaction'
     })
 
-    firth_results.to_csv(os.path.join(SHARE_DIR, "firth_multivariable_results_Interaction.csv"), index=False)
+    firth_results.to_csv(os.path.join(SHARE_DIR, "firth_multivariable_results_Interaction_bmi.csv"), index=False)
     print("Firth results exported.")
     print(firth_results[['Variable', 'Odds Ratio', 'P-Value']].to_string(index=False))
 except Exception as e:

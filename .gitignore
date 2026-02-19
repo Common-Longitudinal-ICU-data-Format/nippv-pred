@@ -2,3 +2,6 @@ config.json
 output/
 output_to_share/
 .DS_*
+*.logs
+*.log
+*.nbconvert.ipynb

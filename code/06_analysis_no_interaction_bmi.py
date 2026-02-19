@@ -4,6 +4,8 @@ import os
 import json
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from scipy.stats import chi2_contingency, ttest_ind
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 from scipy.special import logit as scipy_logit
 from sklearn.metrics import roc_auc_score, brier_score_loss
 from sklearn.base import BaseEstimator
@@ -25,44 +27,153 @@ with open(config_path) as f:
     config = json.load(f)
 SITE = config.get('site', 'unknown')
 
-nippv_data = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'no_bmi', 'NIPPV_analytic_dataset.csv'))
+nippv_data = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'bmi', 'NIPPV_analytic_dataset_bmi.csv'))
 
-# Predictor lists
-main_predictors = [
-    'age_scale', 'female', 'pco2_scale', 'ph_scale', 'map_scale',
+ 
+
+# Define the list of predictors for univariate logistic regression
+
+predictors = [
+
+    'age_scale', 'bmi_scale', 'female', 'pco2_scale', 'ph_scale', 'map_scale',
     'rr_scale', 'hr_scale', 'fio2_high', 'peep_scale', 'tidal_volume_scale'
 ]
+ 
 
-# =====================================================
-# MULTIVARIABLE MODEL WITH INTERACTION TERMS
-# =====================================================
+# Initialize list to store univariate results
 
-# Define the formula with interaction terms (Age x pH, pCO2 x RR)
-final_formula = ('failure ~ age_scale + female + pco2_scale + ph_scale + map_scale '
-                 '+ rr_scale + hr_scale + fio2_high + peep_scale + tidal_volume_scale '
-                 '+ age_scale:ph_scale + pco2_scale:rr_scale')
+univariate_results = []
+
+ 
+
+# Univariate logistic regression for each predictor
+
+for predictor in predictors:
+
+    try:
+
+        # Define the formula for univariate logistic regression
+
+        formula = f'failure ~ {predictor}'
+
+       
+
+        # Fit the logistic regression model
+
+        model = smf.logit(formula=formula, data=nippv_data).fit(disp=0)
+
+       
+
+        # Get OR, p-value, and CI for the predictor (named indexing)
+
+        odds_ratio = np.exp(model.params[predictor])
+
+        p_value = model.pvalues[predictor]
+
+        conf_int = model.conf_int()
+
+        lower_ci = np.exp(conf_int.loc[predictor, 0])
+
+        upper_ci = np.exp(conf_int.loc[predictor, 1])
+
+       
+
+        # Store the results (including log-OR and SE for meta-analysis)
+
+        univariate_results.append({
+
+            'Variable': predictor,
+
+            'log_OR': model.params[predictor],
+
+            'SE_log_OR': model.bse[predictor],
+
+            'Odds Ratio': odds_ratio,
+
+            'P-Value': p_value,
+
+            '95% CI Lower': lower_ci,
+
+            '95% CI Upper': upper_ci
+
+        })
+
+       
+
+    except Exception as e:
+
+        print(f"Error processing variable {predictor}: {e}")
+
+ 
+
+# Convert univariate results to DataFrame
+
+univariate_results_df = pd.DataFrame(univariate_results)
+
+ 
+
+# Display univariate results
+
+print("Univariate Logistic Regression Results (with bmi):")
+
+print(univariate_results_df)
+
+ 
+
+# Define the formula for the final multivariable model with specific interaction terms
+
+final_formula = ('failure ~ age_scale + bmi_scale + female + pco2_scale + ph_scale + map_scale'
+
+                 '+ rr_scale + hr_scale + fio2_high + peep_scale + tidal_volume_scale')
 
 # Fit the final multivariable logistic regression model
+
 final_model = smf.logit(formula=final_formula, data=nippv_data).fit()
 
+ 
+
 # Extract ORs, p-values, CIs, and SEs for multivariable model
+
 multivariable_results = pd.DataFrame({
+
     'Variable': final_model.params.index,
+
     'log_OR': final_model.params.values,
+
     'SE_log_OR': final_model.bse.values,
+
     'Odds Ratio': np.exp(final_model.params.values),
+
     'P-Value': final_model.pvalues.values,
+
     '95% CI Lower': np.exp(final_model.conf_int()[0].values),
+
     '95% CI Upper': np.exp(final_model.conf_int()[1].values)
+
 })
 
+
+
 # Display multivariable results
-print("\nMultivariable Logistic Regression Results (with Interactions):")
+
+print("\nMultivariable Logistic Regression Results (with bmi):")
+
 print(multivariable_results)
 
 # =====================================================
 # MODEL DIAGNOSTICS
 # =====================================================
+
+# Variance Inflation Factors (multicollinearity check)
+# Note: variance_inflation_factor requires a constant column in the design matrix
+# (statsmodels issues #2376, #6249). Add intercept, then compute VIF for predictors only.
+X_vif = sm.add_constant(nippv_data[predictors].dropna())
+vif_data = pd.DataFrame({
+    'Variable': predictors,
+    'VIF': [variance_inflation_factor(X_vif.values, i + 1) for i in range(len(predictors))]
+})
+print("\nVariance Inflation Factors:")
+print(vif_data.to_string(index=False))
 
 # AUC / c-statistic
 predicted_probs = final_model.predict(nippv_data)
@@ -140,27 +251,16 @@ else:
     corrected_brier = brier
     print("WARNING: All bootstrap iterations failed — using apparent values")
 
-# Events per variable (EPV) — interaction model has 12 parameters
-n_params_interaction = len(main_predictors) + 2  # 10 main + 2 interactions = 12
-epv = n1 / n_params_interaction
-print(f"EPV: {epv:.1f} ({n1} events / {n_params_interaction} predictors)")
+# Events per variable (EPV) — TRIPOD+AI required
+n_predictors = len(predictors)
+epv = n1 / n_predictors
+print(f"EPV: {epv:.1f} ({n1} events / {n_predictors} predictors)")
 if epv < 10:
     print(f"WARNING: EPV = {epv:.1f} is below recommended threshold of 10 (TRIPOD+AI)")
 
-# Likelihood ratio test: interaction vs no-interaction model
-no_interaction_formula = ('failure ~ age_scale + female + pco2_scale + ph_scale + map_scale '
-                          '+ rr_scale + hr_scale + fio2_high + peep_scale + tidal_volume_scale')
-no_interaction_model = smf.logit(formula=no_interaction_formula, data=nippv_data).fit(disp=0)
-
-lr_stat = -2 * (no_interaction_model.llf - final_model.llf)
-lr_df = final_model.df_model - no_interaction_model.df_model
-from scipy.stats import chi2
-lr_pvalue = chi2.sf(lr_stat, lr_df)
-print(f"LR test (interaction vs no-interaction): chi2={lr_stat:.4f}, df={lr_df}, p={lr_pvalue:.4f}")
-
 diagnostics = pd.DataFrame({
     'site': [SITE],
-    'model': ['multivariable_interaction'],
+    'model': ['multivariable_no_interaction_bmi'],
     'N': [len(nippv_data)],
     'N_events': [n1],
     'AUC': [round(auc, 4)],
@@ -172,58 +272,60 @@ diagnostics = pd.DataFrame({
     'brier_score': [round(brier, 4)],
     'brier_corrected': [round(corrected_brier, 4)],
     'EPV': [round(epv, 1)],
-    'n_predictors': [n_params_interaction],
+    'n_predictors': [n_predictors],
     'log_likelihood': [final_model.llf],
     'AIC': [final_model.aic],
     'BIC': [final_model.bic],
     'pseudo_r2': [final_model.prsquared],
-    'converged': [final_model.mle_retvals['converged']],
-    'LR_test_vs_no_interaction_chi2': [round(lr_stat, 4)],
-    'LR_test_vs_no_interaction_p': [round(lr_pvalue, 4)]
+    'converged': [final_model.mle_retvals['converged']]
 })
 
 # =====================================================
-# ADD SITE METADATA TO RESULTS
+# ADD SITE METADATA TO ALL RESULTS
 # =====================================================
 
 N = len(nippv_data)
 N_events = int(nippv_data['failure'].sum())
 
+univariate_results_df['site'] = SITE
+univariate_results_df['N'] = N
+univariate_results_df['N_events'] = N_events
+univariate_results_df['model_type'] = 'univariate'
+
 multivariable_results['site'] = SITE
 multivariable_results['N'] = N
 multivariable_results['N_events'] = N_events
-multivariable_results['model_type'] = 'multivariable_interaction'
+multivariable_results['model_type'] = 'multivariable_no_interaction_bmi'
 
 # =====================================================
 # EXPORT RESULTS TO CSV
 # =====================================================
 
-SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'no_bmi')
+SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'bmi')
 os.makedirs(SHARE_DIR, exist_ok=True)
 
-# NOTE: Univariate results are exported by 04_analysis_no_interaction.py only (no duplicates)
-multivariable_results.to_csv(os.path.join(SHARE_DIR, "multivariable_logistic_results_Interaction.csv"), index=False)
+univariate_results_df.to_csv(os.path.join(SHARE_DIR, "univariate_logistic_results_bmi.csv"), index=False)
 
-diagnostics.to_csv(os.path.join(SHARE_DIR, "model_diagnostics_Interaction.csv"), index=False)
+multivariable_results.to_csv(os.path.join(SHARE_DIR, "multivariable_logistic_results_NoInteraction_bmi.csv"), index=False)
+
+diagnostics.to_csv(os.path.join(SHARE_DIR, "model_diagnostics_NoInteraction_bmi.csv"), index=False)
+
+# Export VIF
+vif_data['site'] = SITE
+vif_data.to_csv(os.path.join(SHARE_DIR, "vif_NoInteraction_bmi.csv"), index=False)
 
 # =====================================================
 # VARIANCE-COVARIANCE MATRIX (for multivariate pooling)
 # =====================================================
 vcov = final_model.cov_params()
-vcov.to_csv(os.path.join(SHARE_DIR, "vcov_matrix_Interaction.csv"))
+vcov.to_csv(os.path.join(SHARE_DIR, "vcov_matrix_NoInteraction_bmi.csv"))
 print(f"VCV matrix exported: {vcov.shape[0]}x{vcov.shape[1]}")
 
 # =====================================================
 # FIRTH'S PENALIZED LOGISTIC REGRESSION (sensitivity)
 # =====================================================
 print("\n--- Firth's Penalized Logistic Regression (Sensitivity Analysis) ---")
-
-# Create interaction columns for sklearn-style API
-nippv_data['age_ph_interaction'] = nippv_data['age_scale'] * nippv_data['ph_scale']
-nippv_data['pco2_rr_interaction'] = nippv_data['pco2_scale'] * nippv_data['rr_scale']
-
-firth_predictors = main_predictors + ['age_ph_interaction', 'pco2_rr_interaction']
-X_firth = nippv_data[firth_predictors].values
+X_firth = nippv_data[predictors].values
 y_firth = nippv_data['failure'].values
 
 try:
@@ -231,17 +333,10 @@ try:
     firth.fit(X_firth, y_firth)
 
     firth_coefs = np.concatenate([[firth.intercept_], firth.coef_]).flatten()
-    firth_vars = ['Intercept'] + firth_predictors
-
-    # Map sklearn-style names to statsmodels-style interaction names
-    var_name_map = {
-        'age_ph_interaction': 'age_scale:ph_scale',
-        'pco2_rr_interaction': 'pco2_scale:rr_scale'
-    }
-    firth_var_names = [var_name_map.get(v, v) for v in firth_vars]
+    firth_vars = ['Intercept'] + predictors
 
     firth_results = pd.DataFrame({
-        'Variable': firth_var_names,
+        'Variable': firth_vars,
         'log_OR': firth_coefs,
         'SE_log_OR': firth.bse_,
         'Odds Ratio': np.exp(firth_coefs),
@@ -251,10 +346,10 @@ try:
         'site': SITE,
         'N': N,
         'N_events': N_events,
-        'model_type': 'firth_interaction'
+        'model_type': 'firth_no_interaction'
     })
 
-    firth_results.to_csv(os.path.join(SHARE_DIR, "firth_multivariable_results_Interaction.csv"), index=False)
+    firth_results.to_csv(os.path.join(SHARE_DIR, "firth_multivariable_results_NoInteraction_bmi.csv"), index=False)
     print("Firth results exported.")
     print(firth_results[['Variable', 'Odds Ratio', 'P-Value']].to_string(index=False))
 except Exception as e:

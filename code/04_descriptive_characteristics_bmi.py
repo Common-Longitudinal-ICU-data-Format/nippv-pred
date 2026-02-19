@@ -19,7 +19,7 @@ with open(config_path) as f:
     config = json.load(f)
 SITE = config.get('site', 'unknown')
 
-df = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'no_bmi', 'NIPPV_analytic_dataset.csv'))
+df = pd.read_csv(os.path.join(ROOT_DIR, 'output', 'bmi', 'NIPPV_analytic_dataset_bmi.csv'))
 
 # Ensure NIPPV failure is coded as Yes/No
 df['failure'] = df['failure'].map({1: "Yes", 0: "No"})
@@ -30,6 +30,7 @@ df['failure'] = df['failure'].map({1: "Yes", 0: "No"})
 
 continuous_vars = {
     "age_at_admission": "Age at Admission, years",
+    "bmi": 'Body Mass Index, kg/m^2',
     "map_after_NIPPV": "Mean Arterial Pressure, mmHg",
     "pco2_after_NIPPV": "pCO2, mmHg",
     "ph_after_NIPPV": "pH",
@@ -148,7 +149,7 @@ table1 = pd.DataFrame(rows[1:], columns=rows[0])
 print(f"\nTable 1. Descriptive Characteristics — Site: {SITE} (N={n_total})\n")
 print(table1.to_string(index=False))
 
-SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'no_bmi')
+SHARE_DIR = os.path.join(ROOT_DIR, 'output_to_share', 'bmi')
 os.makedirs(SHARE_DIR, exist_ok=True)
 
 # Add site metadata
