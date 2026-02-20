@@ -114,7 +114,7 @@ def _(ClifOrchestrator, config_path):
 
     # Get hospitalization IDs with NIPPV
     resp_df = clif_prefilter.respiratory_support.df
-    nippv_hosp_ids = resp_df[resp_df['device_category'] == 'NIPPV']['hospitalization_id'].unique().tolist()
+    nippv_hosp_ids = resp_df[resp_df['device_category'].str.upper() == 'NIPPV']['hospitalization_id'].unique().tolist()
 
     print(f"\n[OK] Found {len(nippv_hosp_ids):,} hospitalizations with NIPPV events")
     print(f"This will be used to filter all subsequent table loads (reduces memory usage)")
@@ -243,10 +243,10 @@ def _(clif, pd):
     vitals_df = clif.vitals.df.copy()
 
     # Extract weight and height from vitals
-    weight_df = vitals_df[vitals_df['vital_category'] == 'weight_kg'][['hospitalization_id', 'vital_value']].copy()
+    weight_df = vitals_df[vitals_df['vital_category'].str.upper() == 'WEIGHT_KG'][['hospitalization_id', 'vital_value']].copy()
     weight_df['weight_kg'] = pd.to_numeric(weight_df['vital_value'], errors='coerce')
 
-    height_df = vitals_df[vitals_df['vital_category'] == 'height_cm'][['hospitalization_id', 'vital_value']].copy()
+    height_df = vitals_df[vitals_df['vital_category'].str.upper() == 'HEIGHT_CM'][['hospitalization_id', 'vital_value']].copy()
     height_df['height_cm'] = pd.to_numeric(height_df['vital_value'], errors='coerce')
 
     # Get first non-null values per hospitalization
